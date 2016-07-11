@@ -33,6 +33,9 @@
 //--CAUSA: evento ricevutoReady nella funzone comandi() 
 
 
+//TEST COMMIT(2)
+
+
 
 /* Parte Client per interfacciarsi con Raspberry + Interpretazione comandi */
 var net = require('net');

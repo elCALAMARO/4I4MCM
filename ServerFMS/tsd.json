@@ -7,6 +7,30 @@
   "installed": {
     "node/node.d.ts": {
       "commit": "1c7905f8ff315708d2e885bc28f4c023590fb6ab"
+    },
+    "express-serve-static-core/express-serve-static-core.d.ts": {
+      "commit": "1c7905f8ff315708d2e885bc28f4c023590fb6ab"
+    },
+    "inquirer/inquirer.d.ts": {
+      "commit": "1c7905f8ff315708d2e885bc28f4c023590fb6ab"
+    },
+    "express/express.d.ts": {
+      "commit": "1c7905f8ff315708d2e885bc28f4c023590fb6ab"
+    },
+    "serve-static/serve-static.d.ts": {
+      "commit": "1c7905f8ff315708d2e885bc28f4c023590fb6ab"
+    },
+    "through/through.d.ts": {
+      "commit": "1c7905f8ff315708d2e885bc28f4c023590fb6ab"
+    },
+    "rx/rx-lite.d.ts": {
+      "commit": "1c7905f8ff315708d2e885bc28f4c023590fb6ab"
+    },
+    "mongoose/mongoose.d.ts": {
+      "commit": "1c7905f8ff315708d2e885bc28f4c023590fb6ab"
+    },
+    "mime/mime.d.ts": {
+      "commit": "1c7905f8ff315708d2e885bc28f4c023590fb6ab"
     }
   }
 }
