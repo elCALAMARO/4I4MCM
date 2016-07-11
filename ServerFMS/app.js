@@ -26,7 +26,7 @@
   
  
  ***08/07/16***
- -Integrato codice macchina a stati con modulo separato (Modulo_Funzioni) 
+ -Integrato codice macchina a stati con modulo separato (Automa_Modulo) 
  */
 
 //***DA FARE: sistemare ancora la duplicazione dell'interfaccia dopo diversi comandi dati di seguito attraverso il menu "invia comando"
