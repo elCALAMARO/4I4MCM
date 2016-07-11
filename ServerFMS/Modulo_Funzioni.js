@@ -5,8 +5,7 @@
 /* MODIFICHE EFFETTUATE:
 ***08/07/16*** 
  *-Nel cambio di stato da s4 a s0 viene lanciato l'eveto ricevutoReady per fare ritornare il menu
-
-
+*/
 
 var exports = module.exports = {};
 var funzioni = {};
