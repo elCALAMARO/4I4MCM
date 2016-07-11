@@ -1,5 +1,5 @@
 ﻿//ServerFMS
-//DATA ULITMA MODIFICA: 07/07/16
+//DATA ULITMA MODIFICA: 08/07/16
 //VERSIONE FILE: 1.3.4
 
 /* MODIFICHE EFFETTUATE:
@@ -22,6 +22,11 @@
  ***07/07/16***
 -Corretto orario scritto nel file di log (adesso mostra l'ora locale)
 -Aggiunte alcune voci nel menu per tornare indietro da diverse sottosezioni
+  
+  
+ 
+ ***08/07/16***
+ -Integrato codice macchina a stati con modulo separato (Modulo_Funzioni) 
  */
 
 //***DA FARE: sistemare ancora la duplicazione dell'interfaccia dopo diversi comandi dati di seguito attraverso il menu "invia comando"
