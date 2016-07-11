@@ -271,6 +271,7 @@ module.exports = function (ee) {
             case S_ERROR:
                 console.log("cambio stato da S4-S0");
                 commandState = S_READY;
+                ee.emit("inputComando", 5);
                 ee.emit("statoCambiato", commandState);
                 break;
         }
