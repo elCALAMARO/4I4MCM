@@ -1,0 +1,17 @@
+{
+  "name": "server-fms",
+  "version": "0.0.0",
+  "description": "ServerFMS",
+  "main": "app.js",
+  "author": {
+    "name": "Stage MCM",
+    "email": ""
+  },
+  "dependencies": {
+    "express": "^4.14.0",
+    "inquirer": "^1.1.2",
+    "mongoose": "^4.5.3",
+    "requestify": "^0.1.17",
+    "skeemas-body-parser": "^2.0.0"
+  }
+}
