@@ -31,7 +31,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="app.js" />
-    <Compile Include="Modulo_Funzioni.js" />
+    <Compile Include="Automa_Modulo.js" />
     <Content Include="package.json" />
     <Content Include="README.md" />
   </ItemGroup>

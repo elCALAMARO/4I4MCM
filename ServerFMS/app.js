@@ -57,7 +57,7 @@ var portdb;
 var portapi;
 var client = new net.Socket();
 
-var modulo = require("./Modulo_Funzioni.js")(ee);
+var modulo = require("./Automa_Modulo.js")(ee);
 
 
 
