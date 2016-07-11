@@ -1,4 +1,14 @@
-﻿var exports = module.exports = {};
+﻿//Modulo_Funzioni
+//DATA ULITMA MODIFICA: 08/07/16
+//VERSIONE FILE: 1.0.1
+
+/* MODIFICHE EFFETTUATE:
+***08/07/16*** 
+ *-Nel cambio di stato da s4 a s0 viene lanciato l'eveto ricevutoReady per fare ritornare il menu
+
+
+
+var exports = module.exports = {};
 var funzioni = {};
 
 var commandInput = 0;
@@ -271,7 +281,7 @@ module.exports = function (ee) {
             case S_ERROR:
                 console.log("cambio stato da S4-S0");
                 commandState = S_READY;
-                ee.emit("inputComando", 5);
+                ee.emit("ricevutoReady");
                 ee.emit("statoCambiato", commandState);
                 break;
         }
