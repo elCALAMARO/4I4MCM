@@ -31,6 +31,7 @@
 
 //***DA FARE: sistemare ancora la duplicazione dell'interfaccia dopo diversi comandi dati di seguito attraverso il menu "invia comando"
 //--CAUSA: evento ricevutoReady nella funzone comandi() 
+//TEST  COMMIT
 
 
 /* Parte Client per interfacciarsi con Raspberry + Interpretazione comandi */
