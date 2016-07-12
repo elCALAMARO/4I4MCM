@@ -32,6 +32,7 @@
   <ItemGroup>
     <Compile Include="app.js" />
     <Compile Include="Automa_Modulo.js" />
+    <Compile Include="Ciclo_Controllo.js" />
     <Content Include="package.json" />
     <Content Include="README.md" />
   </ItemGroup>

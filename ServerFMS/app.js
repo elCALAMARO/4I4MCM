@@ -57,6 +57,7 @@ var portapi;
 var client = new net.Socket();
 
 var modulo = require("./Automa_Modulo.js")(ee);
+//var modulo = require("./Ciclo_Controllo.js")(ee);     //TEST
 
 
 
@@ -1076,6 +1077,9 @@ function menu() {
 
         } else if (respuestas.servicios == "-[4]Default") {         // default utilizzato per eventuali aggiunte
             console.log("Non c'è niente qui.");
+            console.log("Avvio portaLavoro");
+            cicl
+
             menu();
             return;
 
