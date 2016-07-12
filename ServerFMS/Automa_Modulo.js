@@ -11,9 +11,7 @@ var exports = module.exports = {};
 var funzioni = {};
 
 var commandInput = 0;
-var timeOut = 0;      //Timeout utilizzato per quattro timeout : TIMEOUT_WAIT_ACK, TIMEOUT_WAIT_EXEC, TIMEOUT_WAIT_READY, TIMEOUT_ERROR 
-
-//stati
+var timeOut = 0;      //Timeout utilizzato per quattro timeout : TIMEOUT_WAIT_ACK, TIMEOUT_WAIT_EXEC, TIMEOUT_WAIT READY, TIMEOUT_ERROR 
 const S_READY = 0;
 const S_WAIT_ACK = 1;
 const S_WAIT_EXEC = 2;
@@ -90,6 +88,7 @@ module.exports = function (ee) {
         switch (commandState) {
 
             case S_READY:
+                
                 break;
 
             case S_WAIT_ACK:
@@ -118,8 +117,8 @@ module.exports = function (ee) {
     
     function on_I_NACK() {
         switch (commandState) {
-
             case S_READY:
+                
                 break;
 
             case S_WAIT_ACK:
@@ -149,9 +148,11 @@ module.exports = function (ee) {
         switch (commandState) {
 
             case S_READY:
+                
                 break;
 
             case S_WAIT_ACK:
+                
                 break;
 
             case S_WAIT_EXEC:
@@ -164,6 +165,7 @@ module.exports = function (ee) {
                 break;
 
             case S_WAIT_READY:
+                
                 break;
 
             case S_ERROR:
@@ -176,6 +178,7 @@ module.exports = function (ee) {
         switch (commandState) {
 
             case S_READY:
+                
                 break;
 
             case S_WAIT_ACK:
@@ -246,6 +249,7 @@ module.exports = function (ee) {
         switch (commandState) {
 
             case S_READY:
+                
                 break;
 
             case S_WAIT_ACK:

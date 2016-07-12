@@ -1,6 +1,6 @@
 ﻿//ServerFMS
-//DATA ULITMA MODIFICA: 08/07/16
-//VERSIONE FILE: 1.3.5
+//DATA ULITMA MODIFICA: 12/07/16
+//VERSIONE FILE: 1.3.6
 
 /* MODIFICHE EFFETTUATE:
 ***05/07/16*** 
@@ -24,11 +24,17 @@
 -Aggiunte alcune voci nel menu per tornare indietro da diverse sottosezioni
   
   
- 
  ***08/07/16***
  -Integrato codice macchina a stati con modulo separato (Automa_Modulo) 
- */
+  
+ 
+ ***12/07/16*** 
+ -Separati comandi navetta in un modulo separato (Modulo_Comandi)
+ -L'automa è ora gestito e richiamato solo da Modulo_Comandi
 
+  
+  
+ 
 //***DA FARE: sistemare ancora la duplicazione dell'interfaccia dopo diversi comandi dati di seguito attraverso il menu "invia comando"
 //--CAUSA: evento ricevutoReady nella funzone comandi() 
 
@@ -43,11 +49,7 @@ var inquirer = require("inquirer");
 /* Leggo da file IP e porta Server Raspberry separati tramite il carattere '\r\n' */
 var contenuto = fs.readFileSync('config.txt', 'utf8');
 var array = contenuto.split('\r\n');
-var contaRichieste = 0;
 var rl = readLine.createInterface(process.stdin, process.stdout);
-//var timeOut = 0;
-//var timeOut2 = 0;
-//var timeOut3 = 0;
 var ee = new EVENTEMITTER();
 var fs = require('fs');
 var dataOrario;
@@ -56,10 +58,7 @@ var portdb;
 var portapi;
 var client = new net.Socket();
 
-var modulo = require("./Automa_Modulo.js")(ee);
-//var modulo = require("./Ciclo_Controllo.js")(ee);     //TEST
-
-
+ 
 
 var statoConn = 0;
 
@@ -91,6 +90,9 @@ for (var i = 0; i < array.length; i++) {
         }
     }
 }
+
+
+var comandi_Navetta = require("./Modulo_Comandi.js")(ee, client, modifica_database, portapi);
 
 
 /* Inizio parte di interazione con il DB*/
@@ -1077,9 +1079,6 @@ function menu() {
 
         } else if (respuestas.servicios == "-[4]Default") {         // default utilizzato per eventuali aggiunte
             console.log("Non c'è niente qui.");
-            console.log("Avvio portaLavoro");
-            cicl
-
             menu();
             return;
 
@@ -1097,9 +1096,7 @@ var p;
 //muove il pezzo nei posti di stoccaggio stabiliti 
 function muoviStoccaggio(posIniziale, urlPezzo) {
     console.log("Entrato nella funzione muoviStoccaggio");
-    if (modulo.richiestaEseguibile() == false) {
-        return;
-    }
+  
     var stoccaggio;
     controlloconnessione()
     
@@ -1118,14 +1115,12 @@ function muoviStoccaggio(posIniziale, urlPezzo) {
 
 //muove pezzo nel posto operatore 
 function muoviOperatore(posizioneAttuale, urlOp, urlPezzo) {
-    if (modulo.richiestaEseguibile() == false) {
-        return;
-    }
+
     console.log("Entrato in muovioperatore, posizione attuale: " + posizioneAttuale);
     //richiamo la funzione per connettere il client al server 
-    controlloconnessione()
+    controlloconnessione();
     
-    MuoviPezzo('MP', posizioneAttuale, 1)
+    comandi_Navetta.MuoviPezzo('MP', posizioneAttuale, 1)
     var putPosto = { posto: 1 };
     var putStato = { stato: 'LIBERO' };
     var url = 'http://localhost:' + portapi + '/api/postiStoccaggio/' + p._id + '/stato';
@@ -1307,7 +1302,7 @@ function riconosciComando(stringaGrezza) {
             return;
         }
         
-        MuoviPezzo(array[0].toUpperCase(), array[1], array[2]);
+        comandi_Navetta.MuoviPezzo(array[0].toUpperCase(), array[1], array[2]);
         return;
     } 
 	
@@ -1335,7 +1330,7 @@ function riconosciComando(stringaGrezza) {
             return;
         }
         
-        MuoviNavetta(array[0].toUpperCase(), array[1]);
+        comandi_Navetta.MuoviNavetta(array[0].toUpperCase(), array[1]);
         return;
                  
     }
@@ -1352,7 +1347,7 @@ function riconosciComando(stringaGrezza) {
             comandi();
             return;
         } else {
-            OttieniDati(array[0].toUpperCase());
+            comandi_Navetta.OttieniDati(array[0].toUpperCase());
             return;
         }
     }
@@ -1368,7 +1363,7 @@ function riconosciComando(stringaGrezza) {
             comandi();
             return;
         } else {
-            OttieniPostoNavetta(array[0].toUpperCase());
+            comandi_Navetta.OttieniPostoNavetta(array[0].toUpperCase());
             return;
         }
     } 
@@ -1384,7 +1379,7 @@ function riconosciComando(stringaGrezza) {
             comandi();
             return;
         } else {
-            Reset(array[0].toUpperCase());
+            comandi_Navetta.Reset(array[0].toUpperCase());
             return;
         }
     }
@@ -1397,130 +1392,130 @@ function riconosciComando(stringaGrezza) {
     }
 }
 
-/* Parametri function: comando inserito dall'utente, parametri inseriti dall'utente */
-function MuoviPezzo(comando, vet1, vet2) {												//Muove pezzo da vet1 a vet2 e poi torna in posizione 1(posto operatore)
-    console.log("Entrato nella funzione MuoviPezzo");
-    //console.log("Stato richiesta: "+ statoRichiesta);
-    if (modulo.richiestaEseguibile() == false) {
+///* Parametri function: comando inserito dall'utente, parametri inseriti dall'utente */
+//function MuoviPezzo(comando, vet1, vet2) {												//Muove pezzo da vet1 a vet2 e poi torna in posizione 1(posto operatore)
+//    console.log("Entrato nella funzione MuoviPezzo");
+//    //console.log("Stato richiesta: "+ statoRichiesta);
+//    if (modulo.richiestaEseguibile() == false) {
         
-        return;
-    }
-    /* Aggiungo il numero di richiesta alla stringa inserita da console */
-    contaRichieste++;
-    client.write(contaRichieste + ',' + comando + ',' + vet1 + ',' + vet2 + '\n');
-    ee.emit("inputComando", 0);
-    //chiamata per ottenere un pezzo
-    ee.on('ricevutoExec', function () {
-        console.log("Entrato in evento ricevutoExec");
-        requestify.get('http://localhost:' + portapi + '/api/pezzi').then(function (response) {
+//        return;
+//    }
+//    /* Aggiungo il numero di richiesta alla stringa inserita da console */
+//    contaRichieste++;
+//    client.write(contaRichieste + ',' + comando + ',' + vet1 + ',' + vet2 + '\n');
+//    ee.emit("inputComando", 0);
+//    //chiamata per ottenere un pezzo
+//    ee.on('ricevutoExec', function () {
+//        console.log("Entrato in evento ricevutoExec");
+//        requestify.get('http://localhost:' + portapi + '/api/pezzi').then(function (response) {
             
-            var url = 'http://localhost:' + portapi + '/api/pezzi/';
-            var listaPezzi = response.getBody();
-            for (var i = 0; i < listaPezzi.length; i++) {
-                /* console.log("Entrato in for per aggiornamento db");
-	console.log("listaPezzi[0]: " + listaPezzi[0]);
-	console.log("posto di i(pezzo singolo): "+listaPezzi[i].posto);
-	console.log("vet1: "+ vet1); */
-            if (listaPezzi[i].posto == vet1) {
-                    //aggiorna il posto del pezzo 
+//            var url = 'http://localhost:' + portapi + '/api/pezzi/';
+//            var listaPezzi = response.getBody();
+//            for (var i = 0; i < listaPezzi.length; i++) {
+//                /* console.log("Entrato in for per aggiornamento db");
+//	console.log("listaPezzi[0]: " + listaPezzi[0]);
+//	console.log("posto di i(pezzo singolo): "+listaPezzi[i].posto);
+//	console.log("vet1: "+ vet1); */
+//            if (listaPezzi[i].posto == vet1) {
+//                    //aggiorna il posto del pezzo 
                     
-                    /* console.log("Entrato in if");		
-				console.log("vet2 in if: " + vet2); */
-				url = url + listaPezzi[i]._id + "/posto";
-                    //console.log("url: " + url);
-                    var put = { posto: vet2 };
-                    /* requestify.put(url,put).then(function (risposta) {
-					console.log("valore posto aggiornato: "+listaPezzi[i].posto);
-                console.log(risposta.getBody().message);
-                }) */
-				modifica_database(url, put);
-                }
-            }
-        })
-    })
+//                    /* console.log("Entrato in if");		
+//				console.log("vet2 in if: " + vet2); */
+//				url = url + listaPezzi[i]._id + "/posto";
+//                    //console.log("url: " + url);
+//                    var put = { posto: vet2 };
+//                    /* requestify.put(url,put).then(function (risposta) {
+//					console.log("valore posto aggiornato: "+listaPezzi[i].posto);
+//                console.log(risposta.getBody().message);
+//                }) */
+//				modifica_database(url, put);
+//                }
+//            }
+//        })
+//    })
     
     
     
     
-    var mex = contaRichieste + ',' + comando + ',' + vet1 + ',' + vet2;
-    console.log("inviato al rPi " + mex);
-    ee.emit('Logga', "RichiestaRaspberry", mex);
-    //timeout();
-}
+//    var mex = contaRichieste + ',' + comando + ',' + vet1 + ',' + vet2;
+//    console.log("inviato al rPi " + mex);
+//    ee.emit('Logga', "RichiestaRaspberry", mex);
+//    //timeout();
+//}
 
-/* Parametri function: comando inserito dall'utente, parametro inserito dall'utente */
-function MuoviNavetta(comando, vet1) {
-    console.log("Richisto mn");
-    console.log(modulo)
-    if (modulo.richiestaEseguibile() == false) {
-        return;
-    }
+///* Parametri function: comando inserito dall'utente, parametro inserito dall'utente */
+//function MuoviNavetta(comando, vet1) {
+//    console.log("Richiesto mn");
+//    console.log(modulo)
+//    if (modulo.richiestaEseguibile() == false) {
+//        return;
+//    }
     
-    /* Aggiungo il numero di richiesta alla stringa inserita da console */
-    console.log("INVIO PACCHETTO: " + contaRichieste + ',' + comando + ',' + vet1 + '\n');
-    contaRichieste++;
-    client.write(contaRichieste + ',' + comando + ',' + vet1 + '\n');
-    ee.emit("inputComando", 0);
+//    /* Aggiungo il numero di richiesta alla stringa inserita da console */
+//    console.log("INVIO PACCHETTO: " + contaRichieste + ',' + comando + ',' + vet1 + '\n');
+//    contaRichieste++;
+//    client.write(contaRichieste + ',' + comando + ',' + vet1 + '\n');
+//    ee.emit("inputComando", 0);
     
-    var mex = contaRichieste + ',' + comando + ',' + vet1;
-    ee.emit('Logga', "RichiestaRaspberry", mex);
+//    var mex = contaRichieste + ',' + comando + ',' + vet1;
+//    ee.emit('Logga', "RichiestaRaspberry", mex);
 
-    //timeout();
-}
+//    //timeout();
+//}
 
-/* Parametri function: comando inserito dall'utente */
-function OttieniDati(comando) {
-    if (modulo.richiestaEseguibile() == false) {
+///* Parametri function: comando inserito dall'utente */
+//function OttieniDati(comando) {
+//    if (modulo.richiestaEseguibile() == false) {
         
-        return;
-    }
+//        return;
+//    }
     
-    /* Aggiungo il numero di richiesta alla stringa inserita da console */
-    contaRichieste++;
-    client.write(contaRichieste + ',' + comando + '\n');
-    ee.emit("inputComando", 0);
+//    /* Aggiungo il numero di richiesta alla stringa inserita da console */
+//    contaRichieste++;
+//    client.write(contaRichieste + ',' + comando + '\n');
+//    ee.emit("inputComando", 0);
     
-    var mex = contaRichieste + ',' + comando;
-    ee.emit('Logga', "RichiestaRaspberry", mex);
+//    var mex = contaRichieste + ',' + comando;
+//    ee.emit('Logga', "RichiestaRaspberry", mex);
 
-    //timeout();
-}
+//    //timeout();
+//}
 
-/* Parametri function: comando inserito dall'utente */
-function OttieniPostoNavetta(comando) {
-    if (modulo.richiestaEseguibile() == false) {
+///* Parametri function: comando inserito dall'utente */
+//function OttieniPostoNavetta(comando) {
+//    if (modulo.richiestaEseguibile() == false) {
         
-        return;
-    }
-    /* Aggiungo il numero di richiesta alla stringa inserita da console */
-    contaRichieste++;
-    client.write(contaRichieste + ',' + comando + '\n');
-    ee.emit("inputComando", 0);
+//        return;
+//    }
+//    /* Aggiungo il numero di richiesta alla stringa inserita da console */
+//    contaRichieste++;
+//    client.write(contaRichieste + ',' + comando + '\n');
+//    ee.emit("inputComando", 0);
     
-    var mex = contaRichieste + ',' + comando;
-    ee.emit('Logga', "RichiestaRaspberry", mex);
+//    var mex = contaRichieste + ',' + comando;
+//    ee.emit('Logga', "RichiestaRaspberry", mex);
 
-    //timeout();
+//    //timeout();
     
-}
+//}
 
-/* Parametri function: comando inserito dall'utente */
-function Reset(comando) {
-    if (modulo.richiestaEseguibile() == false) {
+///* Parametri function: comando inserito dall'utente */
+//function Reset(comando) {
+//    if (modulo.richiestaEseguibile() == false) {
         
-        return;
-    }
+//        return;
+//    }
     
-    /* Aggiungo il numero di richiesta alla stringa inserita da console */
-    contaRichieste++;
-    client.write(contaRichieste + ',' + comando + '\n');
-    ee.emit("inputComando", 0);
+//    /* Aggiungo il numero di richiesta alla stringa inserita da console */
+//    contaRichieste++;
+//    client.write(contaRichieste + ',' + comando + '\n');
+//    ee.emit("inputComando", 0);
     
-    var mex = contaRichieste + ',' + comando;
-    ee.emit('Logga', "RichiestaRaspberry", mex);
+//    var mex = contaRichieste + ',' + comando;
+//    ee.emit('Logga', "RichiestaRaspberry", mex);
 
-   // timeout();    
-}
+//   // timeout();    
+//}
 
 //evento per il file di log 
 ee.on('Logga', function (cat, mess) {
@@ -1559,43 +1554,38 @@ client.on('data', function (data) {
     var array = (data.toString()).split(',');
     console.log(array);
     
-    switch (array[1]) {
-        case "ack\n":
-            //clearTimeout(timeOut);
-            ee.emit("inputComando", 1);
-            break;
+    if (array[1].startsWith("ack")) {
+        //clearTimeout(timeOut);
+        ee.emit("inputComando", 1);
+    }
 
-        case "exec\n":
-            //clearTimeout(timeOut);
-            ee.emit("inputComando", 3)
-            console.log("Ricevuto Exec");
-            ee.emit('ricevutoExec');
-            console.log("Lanciato evento 'ricevutoExec'");
-            break;
+    else if (array[1].startsWith("exec")) {
+        //clearTimeout(timeOut);
+        ee.emit("inputComando", 3)
+        console.log("Ricevuto Exec");
+        ee.emit('ricevutoExec');
+        console.log("Lanciato evento 'ricevutoExec'");
+    }
 
-        case "ready\n":
-            //clearTimeout(timeOut3);
-            ee.emit("inputComando", 5)
-            ee.emit('ricevutoReady');
-            console.log("Lanciato evento 'ricevutoReady'");
-            break;
+    else if (array[1].startsWith("ready")) {
+        //clearTimeout(timeOut3);
+        ee.emit("inputComando", 5)
+        ee.emit('ricevutoReady');
+        console.log("Lanciato evento 'ricevutoReady'");
+    }
 
-        case "nack\n":
-            ee.emit("inputComando", 2);
-            break;
+    else if (array[1].startsWith("nack")) {
+        ee.emit("inputComando", 2);
+    }
 
-        case "err\n":
-            ee.emit("inputComando", 4);
-            break;
-    
+    else if (array[1].startsWith("err")) {
+        ee.emit("inputComando", 4);
     }
     
     ee.emit('Logga', 'RispostaRaspberry', data);
     rl.setPrompt('>');
     rl.prompt();
     
-
- 
 /* client.on('data', function (data) {
 
     /* Alla ricezione di dati da parte del server, azzererò il timeout inizializzato al momento dell'invio dei dati */
@@ -1692,16 +1682,16 @@ function comandi() {
                 invioDato(risposta.comando);
                 
                 ee.once('ricevutoReady', function () {
-                    console.log("menu comandi chiamato da funzione comandi");
+                    console.log("menù comandi chiamato da funzione comandi");
                     comandi();
-                    return;					                                                                    //DA SISTEMARE
+                    return;	
                 });
             })
             return;
         }
         return;
     });
-    return;                                      //TEST  3 RETURN
+    return;
 };
 
 // funzione riguaradante i pezzi
@@ -2880,10 +2870,8 @@ function cicli() {
 
 //effettua la connessione tra client e server
 function connessioneClient() {
-    if (statoConn == 0) {
+    if (statoConn == 0) {     
         client.connect(port, host, function () {
-            
-            
             statoConn = 1;
             ee.emit('Logga', 'Connessione', 'Connesso al Server Raspberry');
         })
@@ -2892,14 +2880,13 @@ function connessioneClient() {
 
 //controlla che sia attiva o no la connessione 
 function controlloconnessione() {
-    //console.log("Entrato nella funzione controlloconnessione");
+    console.log("Entrato nella funzione controlloconnessione");
     if (statoConn == 0) {
         client.connect(port, host, function () {
             statoConn = 1;
             ee.emit('Logga', 'Connessione', 'Connesso al Server Raspberry');
         })
             // Appena questo client si collega con successo al server, inviamo dei dati che saranno ricevuti dal server quale messaggio dal client
-          
       
     }
 }
@@ -2961,7 +2948,7 @@ function pezzo_posto_libero(stoccaggio, urlPezzo) {
         
         if (stoccaggio[i].stato.toUpperCase() == 'LIBERO') {
             console.log("Entrato nella funzione pezzo_posto_libero in if " + stoccaggio[i].stato + stoccaggio[i].posto);
-            MuoviPezzo('MP', 1, stoccaggio[i].posto);
+            comandi_Navetta.MuoviPezzo('MP', 1, stoccaggio[i].posto);
             p = stoccaggio[i];
             var url = 'http://localhost:' + portapi + '/api/postiStoccaggio/' + p._id + '/stato';
             var put = { stato: 'OCCUPATO' };
