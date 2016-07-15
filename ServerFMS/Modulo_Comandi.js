@@ -1,27 +1,32 @@
-﻿var contaRichieste = 0;
+﻿//Modulo_Comandi
+//DATA ULITMA MODIFICA: 15/07/16
+//VERSIONE FILE: 1.0.1
 
+var contaRichieste = 0;
 var requestify = require('requestify');
-
 var exports = module.exports = {};
 var comandi = {};
 
-module.exports = function (ee,client, modifica_database, portapi) {
+module.exports = function (ee,client, modifica_database, portapi,pezzo) {
 
     var automa = require("./Automa_Modulo.js")(ee);
+    var navettaDisp = true;
+    
+    comandi.richiestaEseguibile = automa.richiestaEseguibile;                                       
+    comandi.modifica_database = modifica_database;                                                  //Serve a caricaParti 
 
     comandi.MuoviPezzo = function MuoviPezzo(comando, vet1, vet2) {
-        console.log("Entrato nella funzione MuoviPezzo");
-        
-        //console.log("Stato richiesta: "+ statoRichiesta);
-        if (automa.richiestaEseguibile() == false) {
-            
-            return;
-        }
-        /* Aggiungo il numero di richiesta alla stringa inserita da console */
-        contaRichieste++;
         console.log("Richiesta muovipezzo")
-        client.write(contaRichieste + ',' + comando + ',' + vet1 + ',' + vet2 + '\n');
-        ee.emit("inputComando", 0);
+        ee.once('statoCambiato', function (stato) {
+            
+            //Se automa è in stato WAIT_ACK e la navetta è disponibile proseguo,
+            //altrimenti ritorna false
+            if ((stato == 1) && (navettaDisp)) { navettaDisp = false } else { return false };
+
+            /* Aggiungo il numero di richiesta alla stringa inserita da console */
+            contaRichieste++;
+            client.write(contaRichieste + ',' + comando + ',' + vet1 + ',' + vet2 + '\n');
+       
         //chiamata per ottenere un pezzo
         ee.on('ricevutoExec', function () {
             console.log("Entrato in evento ricevutoExec");
@@ -30,114 +35,123 @@ module.exports = function (ee,client, modifica_database, portapi) {
                 var url = 'http://localhost:' + portapi + '/api/pezzi/';
                 var listaPezzi = response.getBody();
                 for (var i = 0; i < listaPezzi.length; i++) {
-                    /* console.log("Entrato in for per aggiornamento db");
-	    console.log("listaPezzi[0]: " + listaPezzi[0]);
-	    console.log("posto di i(pezzo singolo): "+listaPezzi[i].posto);
-	    console.log("vet1: "+ vet1); */
+         
                 if (listaPezzi[i].posto == vet1) {
-                        //aggiorna il posto del pezzo 
-                        
-                        /* console.log("Entrato in if");		
-				    console.log("vet2 in if: " + vet2); */
+                        //aggiorna il posto del pezzo                                             
 				    url = url + listaPezzi[i]._id + "/posto";
-                        //console.log("url: " + url);
                         var put = { posto: vet2 };
-                        /* requestify.put(url,put).then(function (risposta) {
-					    console.log("valore posto aggiornato: "+listaPezzi[i].posto);
-                    console.log(risposta.getBody().message);
-                    }) */
-                        console.log(url,put);
-				    modifica_database(url, put);
+                            modifica_database(url, put);                           
                     }
                 }
             })
+            })
+
+            var mex = contaRichieste + ',' + comando + ',' + vet1 + ',' + vet2;
+            console.log("inviato al rPi " + mex);
+            ee.emit('Logga', "RichiestaRaspberry", mex);
         })
-        
-        var mex = contaRichieste + ',' + comando + ',' + vet1 + ',' + vet2;
-        console.log("inviato al rPi " + mex);
-        ee.emit('Logga', "RichiestaRaspberry", mex);
-        //timeout();
+        ee.emit("inputComando", 0);
     }
-    
-    
+   
     comandi.MuoviNavetta = function MuoviNavetta(comando, vet1) {
-        if (automa.richiestaEseguibile() == false) {
-            return;
-        }
         
-        /* Aggiungo il numero di richiesta alla stringa inserita da console */
-        console.log("INVIO PACCHETTO: " + contaRichieste + ',' + comando + ',' + vet1 + '\n');
-        contaRichieste++;
-        console.log("Richiesta muovinavetta")
+        ee.once("statoCambiato", function (stato) {                            
+            console.log("Ricevuto stato cambiato")
+            //Se automa è in stato WAIT_ACK e la navetta è disponibile proseguo,
+            //altrimenti ritorna false
+            if ((stato == 1) && (navettaDisp)) { navettaDisp = false } else { return false };
+            
+            console.log("INVIO PACCHETTO: " + contaRichieste + ',' + comando + ',' + vet1 + '\n');
+            contaRichieste++;
+            client.write(contaRichieste + ',' + comando + ',' + vet1 + '\n');
 
-        client.write(contaRichieste + ',' + comando + ',' + vet1 + '\n');
-        ee.emit("inputComando", 0);
-        
-        var mex = contaRichieste + ',' + comando + ',' + vet1;
-        ee.emit('Logga', "RichiestaRaspberry", mex);
+            var mex = contaRichieste + ',' + comando + ',' + vet1;
+            ee.emit('Logga', "RichiestaRaspberry", mex);
+        })
+        ee.emit("inputComando", 0)
 
-        //timeout();
     }
-    
-    
+        
+    //acquisire codice QR e aggiornare database
     comandi.OttieniDati = function OttieniDati(comando) {
-        if (automa.richiestaEseguibile() == false) {
-            
-            return;
-        }
-        
-        /* Aggiungo il numero di richiesta alla stringa inserita da console */
-        contaRichieste++;
-        console.log("Richiesta ottienidati")
-
-        client.write(contaRichieste + ',' + comando + '\n');
+        console.log("Entrato in ottieni dati");
+        var nuovoPezzo;       
+        ee.once("statoCambiato", function (stato) {
+            //Se automa è in stato WAIT_ACK e la navetta è disponibile proseguo,
+            //altrimenti ritorna false
+            if ((stato == 1) && (navettaDisp)) { navettaDisp = false } else { return false };                      
+            contaRichieste++;
+            console.log("Richiesta ottienidati")
+            client.write(contaRichieste + ',' + comando + '\n');         
+            ee.on('ricevutoDatiQr', function (datiQr) {
+                nuovoPezzo = new pezzo();            
+                //split per ottenere i dati contenuti nell'array del QR
+                nuovoPezzo.nome = datiQr[0].split(':')[1];
+                nuovoPezzo.tLav = datiQr[1].split(':')[1];
+                nuovoPezzo.operazione = datiQr[2].split(':')[1];
+                nuovoPezzo.stato = "GREZZO";
+                nuovoPezzo.posto = 1;
+                
+                console.log("NOME: " + nuovoPezzo.nome);                //stampa dei campi nome, tLav, operazione, stato, posto
+                console.log("TLAV: " + nuovoPezzo.tLav);
+                console.log("OP: " + nuovoPezzo.operazione);
+                console.log("STATO: " + nuovoPezzo.stato);
+                console.log("POSTO: " + nuovoPezzo.posto);
+                
+                nuovoPezzo.save(function (err) {                    
+                    if (err) {                        
+                        ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
+                    } else {
+                        console.log("Inserito nuovo pezzo:" + nuovoPezzo.nome);
+                        ee.emit("Logga", "Database", "Inserito un pezzo");
+                    }
+                });            
+            })           
+            ee.on("ricevutoReady", function () {
+                ee.emit("inseritoNuovoPezzo", nuovoPezzo)
+            })
+                        
+            var mex = contaRichieste + ',' + comando;
+            ee.emit('Logga', "RichiestaRaspberry", mex);
+        })
         ee.emit("inputComando", 0);
-        
-        var mex = contaRichieste + ',' + comando;
-        ee.emit('Logga', "RichiestaRaspberry", mex);
-
-        //timeout();
     }
-    
-    
+        
     comandi.OttieniPostoNavetta = function OttieniPostoNavetta(comando) {
-        if (automa.richiestaEseguibile() == false) {
-            
-            return;
-        }
         /* Aggiungo il numero di richiesta alla stringa inserita da console */
-        contaRichieste++;
         console.log("Richiesta ottienipostonavetta")
-
-        client.write(contaRichieste + ',' + comando + '\n');
-        ee.emit("inputComando", 0);
         
-        var mex = contaRichieste + ',' + comando;
-        ee.emit('Logga', "RichiestaRaspberry", mex);
-
-    //timeout();
-    
-    }
-    
-    
-    comandi.Reset = function Reset(comando) {
-        if (automa.richiestaEseguibile() == false) {
+        ee.once("statoCambiato", function (stato) {
+            //Se automa è in stato WAIT_ACK e la navetta è disponibile proseguo,
+            //altrimenti ritorna false
+            if ((stato == 1) && (navettaDisp)) { navettaDisp = false } else { return false };
             
-            return;
-        }
-        
-        /* Aggiungo il numero di richiesta alla stringa inserita da console */
-        contaRichieste++;
-        console.log("Richiesta reset")
-
-        client.write(contaRichieste + ',' + comando + '\n');
+            contaRichieste++;
+            client.write(contaRichieste + ',' + comando + '\n');                     
+            var mex = contaRichieste + ',' + comando;
+            ee.emit('Logga', "RichiestaRaspberry", mex);
+        })
         ee.emit("inputComando", 0);
-        
-        var mex = contaRichieste + ',' + comando;
-        ee.emit('Logga', "RichiestaRaspberry", mex);
-
-   // timeout();    
     }
-    
+       
+    comandi.Reset = function Reset(comando) {
+        /* Aggiungo il numero di richiesta alla stringa inserita da console */
+        console.log("Richiesta reset")      
+        ee.once("statoCambiato", function (stato) {
+            //Se automa è in stato WAIT_ACK e la navetta è disponibile proseguo,
+            //altrimenti ritorna false
+            if ((stato == 1) && (navettaDisp)) { navettaDisp = false } else { return false };           
+            contaRichieste++;
+            client.write(contaRichieste + ',' + comando + '\n');
+                        
+            var mex = contaRichieste + ',' + comando;
+            ee.emit('Logga', "RichiestaRaspberry", mex);  
+        })
+        ee.emit("inputComando", 0);
+    }
+        
+    ee.on("ricevutoReady", function (){
+        navettaDisp = true;
+    })   
     return comandi;
 }

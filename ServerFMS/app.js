@@ -1,6 +1,6 @@
 ﻿//ServerFMS
-//DATA ULITMA MODIFICA: 12/07/16
-//VERSIONE FILE: 1.3.6
+//DATA ULITMA MODIFICA: 13/07/16
+//VERSIONE FILE: 1.3.8
 
 /* MODIFICHE EFFETTUATE:
 ***05/07/16*** 
@@ -31,9 +31,12 @@
  ***12/07/16*** 
  -Separati comandi navetta in un modulo separato (Modulo_Comandi)
  -L'automa è ora gestito e richiamato solo da Modulo_Comandi
+  
+    
+  ***13/07/16***
+-Implementato il comando OttieniDati nel Modulo_Comandi
+-Ora salva i dati ricevuti dal codice QR nel database
 
-  
-  
  
 //***DA FARE: sistemare ancora la duplicazione dell'interfaccia dopo diversi comandi dati di seguito attraverso il menu "invia comando"
 //--CAUSA: evento ricevutoReady nella funzone comandi() 
@@ -58,16 +61,12 @@ var portdb;
 var portapi;
 var client = new net.Socket();
 
- 
-
 var statoConn = 0;
 
 /* Indirizzo IP e porta Server Raspberry verranno assegnati una volta esaminato il file .txt e trascurati i commenti
 i quali cominceranno col carattere '#' */
 var host = '';
 var port = 0;
-
-
 
 /* Assegnamento indirizzo IP e porta Server Raspberry */
 for (var i = 0; i < array.length; i++) {
@@ -91,22 +90,15 @@ for (var i = 0; i < array.length; i++) {
     }
 }
 
-
-var comandi_Navetta = require("./Modulo_Comandi.js")(ee, client, modifica_database, portapi);
-
-
 /* Inizio parte di interazione con il DB*/
 var express = require('express'); //necessario alla connessione tra il server e eventualmente una app
 var mongoose = require('mongoose');//trasforma i dati del DB in un oggetto
 var bodyParser = require('body-parser');//conversione in JSON dei dati
 var app = express();
 
-
-
 /*Lo Schema sarà diverso per ogni collezione.*/
 var schema = mongoose.Schema;
 /*I vari Schema sono posti qui e non in un js a parte per motivi di velocità di lettura*/
-
 
 //PEZZI: ogni pezzo, sia esso GREZZO, LAV o FINITO 
 var pezzo = mongoose.model('pezzi', new schema({
@@ -117,20 +109,17 @@ var pezzo = mongoose.model('pezzi', new schema({
     operazione: Number
 }), 'pezzi');
 
-
 //POSTI OPERATORE: Il posto operatore, il primo della linea dei posti. Sarà solo un documento.
 var postoOperatore = mongoose.model('postiOperatore', new schema({
     posto: Number,
     stato: String
 }), 'postiOperatore');
 
-
 //POSTI STOCCAGGIO: Posti della linea esclusi Operatore e Lavoro. Dal 6 al 12.
 var postoStoccaggio = mongoose.model('postiStoccaggio', new schema({
     posto: Number,
     stato: String
 }), 'postiStoccaggio');
-
 
 //POSTI LAVORO: Posti della linea in cui lavoreranno le macchine. Dal 2 al 5
 var postoLavoro = mongoose.model('postiLavoro', new schema({
@@ -145,6 +134,8 @@ var postoLavoro = mongoose.model('postiLavoro', new schema({
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
+var comandi_Navetta = require("./Modulo_Comandi.js")(ee, client, modifica_database, portapi,pezzo);
+var modulo_Ciclo = require("./Ciclo_Controllo.js")(ee, portapi, client, comandi_Navetta);
 
 var router = require('express').Router();
 
@@ -171,8 +162,6 @@ router.use(function (req, res, next) {
 
 mongoose.connect('mongodb://' + hostdb + ':' + portdb + '/BancoDidattico/');
 
-
-
 //radice principale della route
 router.get('/', function (req, res) {
     res.json({ message: 'connesso a radice principale' });
@@ -180,9 +169,6 @@ router.get('/', function (req, res) {
 
 /*ogni parte modificabile di ogni documento di ogni collezione ha la propria route*/
 /*ogni collezione avrà una route iniziale per mostrare il proprio contenuto*/
-
-
-
 
 /************************************************
 ************INIZIO SEZIONE PEZZI*****************
@@ -222,12 +208,10 @@ router.route('/pezzi')
             res.send(err);
             var frase = 'An Error Has Occured: ' + err;
             console.log(frase);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         } else {
             var frase = 'Inserito nuovo pezzo:' + nuovoPezzo.nome;
             res.json({ message: 'Inserito nuovo pezzo:' + nuovoPezzo.nome });
-            
             ee.emit("Logga", "Database", "Inserito un pezzo");
         }
     });
@@ -237,16 +221,13 @@ router.route('/pezzi')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         } else {
             res.json({ message: 'Tutti i pezzi sono stati cancellati' });
-            
             ee.emit("Logga", "Database", 'Cancellazione di tutti i pezzi');
         }
     });
 })
-
 
 router.route('/pezzi/:pezzi_id')
     .get(function (req, res) {
@@ -254,11 +235,9 @@ router.route('/pezzi/:pezzi_id')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         res.send(piece);
-        
         ee.emit("Logga", "Database", " Richiesta Id di un pezzo");
     });
 })
@@ -267,16 +246,13 @@ router.route('/pezzi/:pezzi_id')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         } else {
             res.json({ message: 'Pezzo cancellato' });
-            
             ee.emit("Logga", "Database", "Cancellazione di un pezzo");
         }
     });
 });
-
 
 router.route('/pezzi/:pezzi_id/nome')
     .get(function (req, res) {
@@ -284,11 +260,9 @@ router.route('/pezzi/:pezzi_id/nome')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         res.send(piece.nome);
-        
         ee.emit("Logga", "Database", "Richiesta nome di un pezzo");
     });
 })
@@ -297,7 +271,6 @@ router.route('/pezzi/:pezzi_id/nome')
         if (err) {
             res.sendStatus(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         }
         if (req.body.nome) {
@@ -306,16 +279,13 @@ router.route('/pezzi/:pezzi_id/nome')
             if (err) {
                 res.sendStatus(err);
                 console.log("C'e' stato un errore: " + err);
-                
                 ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
             };
             res.json({ message: 'Pezzo Aggiornato a:' + pezzo.nome });
-            
             ee.emit("Logga", "Database", "Aggiorna il nome di un pezzo");
         });
     });
 })
-
 
 router.route('/pezzi/:pezzi_id/posto')
     .get(function (req, res) {
@@ -323,11 +293,9 @@ router.route('/pezzi/:pezzi_id/posto')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         res.send(JSON.stringify(piece.posto));
-        
         ee.emit('Logga', "Database", "Richiesta del posto di un pezzo");
     });
 })
@@ -336,7 +304,6 @@ router.route('/pezzi/:pezzi_id/posto')
         if (err) {
             res.sendStatus(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         if (req.body.posto) {
@@ -346,16 +313,13 @@ router.route('/pezzi/:pezzi_id/posto')
             if (err) {
                 res.sendStatus(err);
                 console.log("C'e' stato un errore: " + err);
-                
                 ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
             };
             res.json({ message: 'Pezzo Aggiornato a:' + pezzo.posto });
-            
             ee.emit('Logga', "Database", "Aggiornamento del posto di un pezzo");
         });
     });
 })
-
 
 router.route('/pezzi/:pezzi_id/stato')
     .get(function (req, res) {
@@ -363,11 +327,9 @@ router.route('/pezzi/:pezzi_id/stato')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         res.send(piece.stato);
-        
         ee.emit('Logga', "Database", "Richiesta dello stato di un pezzo");
     });
 })
@@ -376,7 +338,6 @@ router.route('/pezzi/:pezzi_id/stato')
         if (err) {
             res.sendStatus(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         if (req.body.stato) {
@@ -386,16 +347,13 @@ router.route('/pezzi/:pezzi_id/stato')
             if (err) {
                 res.sendStatus(err);
                 console.log("C'e' stato un errore: " + err);
-                
                 ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
             };
             res.json({ message: 'Pezzo Aggiornato a:' + pezzo.stato });
-            
             ee.emit('Logga', "Database", "Aggiornamento dello stato di un pezzo");
         });
     });
 })
-
 
 router.route('/pezzi/:pezzi_id/tLav')
     .get(function (req, res) {
@@ -403,11 +361,9 @@ router.route('/pezzi/:pezzi_id/tLav')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         res.send(JSON.stringify(piece.tLav));
-        
         ee.emit('Logga', "Database", "Richiesta del tempo di lavorazione di un pezzo");
     });
 })
@@ -416,7 +372,6 @@ router.route('/pezzi/:pezzi_id/tLav')
         if (err) {
             res.sendStatus(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         if (req.body.tLav) {
@@ -426,16 +381,13 @@ router.route('/pezzi/:pezzi_id/tLav')
             if (err) {
                 res.sendStatus(err);
                 console.log("C'e' stato un errore: " + err);
-                
                 ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
             };
             res.json({ message: 'Pezzo Aggiornato a:' + pezzo.tLav });
-            
             ee.emit('Logga', "Database", "Aggiornamento del tempo di lavorazione di un pezzo");
         });
     });
 })
-
 
 router.route('/pezzi/:pezzi_id/operazione')
     .get(function (req, res) {
@@ -443,11 +395,9 @@ router.route('/pezzi/:pezzi_id/operazione')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         res.send(JSON.stringify(piece.operazione));
-        
         ee.emit('Logga', "Database", "Richiesta dell'operazione di un pezzo");
     });
 })
@@ -456,7 +406,6 @@ router.route('/pezzi/:pezzi_id/operazione')
         if (err) {
             res.sendStatus(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         if (req.body.operazione) {
@@ -466,16 +415,13 @@ router.route('/pezzi/:pezzi_id/operazione')
             if (err) {
                 res.sendStatus(err);
                 console.log("C'e' stato un errore: " + err);
-                
                 ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
             };
             res.json({ message: 'Pezzo Aggiornato a:' + pezzo.operazione });
-            
             ee.emit('Logga', "Database", "Aggiornamento dell'operazione di un pezzo");
         });
     });
 })
-//----------------------------------------------------------------------------------------------------------//
 
 /************************************************
 ************INIZIO SEZIONE POSTI OPERATORE******
@@ -486,11 +432,9 @@ router.route('/postiOperatore')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         res.json(operatore);
-        
         ee.emit('Logga', "Database", "Richiesta di tutti i posti del posto operatore");
     });
 })
@@ -507,11 +451,9 @@ router.route('/postiOperatore')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         } else {
             res.json({ message: 'Inserito nuovo posto operatore al posto:' + nuovoPostoOperatore.posto });
-            
             ee.emit('Logga', "Database", "Inserimento nuovo posto operatore");
         }
     });
@@ -521,16 +463,13 @@ router.route('/postiOperatore')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         } else {
             res.json({ message: 'Tutti i posti operatore sono stati cancellati' });
-            
             ee.emit('Logga', "Database", "Cancella tutti i posti del posto operatore");
         }
     });
 })
-
 
 router.route('/postiOperatore/:postiOperatore_id')
     .get(function (req, res) {
@@ -538,11 +477,9 @@ router.route('/postiOperatore/:postiOperatore_id')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         } else {
             res.send(operatore);
-            
             ee.emit('Logga', "Database", "Richiesta dell'id di un posto del posto operatore");
         }
     });
@@ -552,16 +489,13 @@ router.route('/postiOperatore/:postiOperatore_id')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         } else {
             res.json({ message: 'Posto operatore cancellato' });
-            
             ee.emit('Logga', "Database", "Cancellazione dell'id di un posto operatore");
         }
     });
 });
-
 
 router.route('/postiOperatore/:postiOperatori_id/posto')
     .get(function (req, res) {
@@ -569,11 +503,9 @@ router.route('/postiOperatore/:postiOperatori_id/posto')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         res.send(JSON.stringify(operatore.posto));
-        
         ee.emit('Logga', "Database", "Richiesta di un posto del posto operatore");
     });
 })
@@ -582,7 +514,6 @@ router.route('/postiOperatore/:postiOperatori_id/posto')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         if (req.body.posto) {
@@ -592,16 +523,13 @@ router.route('/postiOperatore/:postiOperatori_id/posto')
             if (err) {
                 res.send(err);
                 console.log("C'e' stato un errore: " + err);
-                
                 ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
             };
             res.json({ message: 'Posto Operatore Aggiornato a:' + operatore.posto });
-            
             ee.emit('Logga', "Database", "Aggiornare un posto del posto operatore");
         });
     });
 })
-
 
 router.route('/postiOperatore/:postiOperatori_id/stato')
     .get(function (req, res) {
@@ -609,11 +537,9 @@ router.route('/postiOperatore/:postiOperatori_id/stato')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         res.send(operatore.stato);
-        
         ee.emit('Logga', "Database", "Richiesta di uno stato del posto operatore");
     });
 })
@@ -622,7 +548,6 @@ router.route('/postiOperatore/:postiOperatori_id/stato')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         if (req.body.stato) {
@@ -632,17 +557,13 @@ router.route('/postiOperatore/:postiOperatori_id/stato')
             if (err) {
                 res.send(err);
                 console.log("C'e' stato un errore: " + err);
-                
                 ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
             };
             res.json({ message: 'Posto Operatore Aggiornato a:' + operatore.stato });
-            
             ee.emit('Logga', "Database", "Aggiornamento di uno stato del posto operatore");
         });
     });
 })
-
-//----------------------------------------------------------------------------------------------------------//
 
 /************************************************
 ************INIZIO SEZIONE POSTI LAVORO**********
@@ -656,12 +577,10 @@ router.route('/postiLavoro')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         res.json(lavoro);
         console.log(JSON.stringify(lavoro));
-        
         ee.emit('Logga', "Database", "Ottieni tutti i postilavoro");
     });
 })
@@ -681,11 +600,9 @@ router.route('/postiLavoro')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         } else {
             res.json({ message: 'Inserito nuovo posto lavoro al posto:' + nuovoPostoLavoro.posto });
-            
             ee.emit('Logga', "Database", "Inserisci i postilavoro");
         }
     });
@@ -695,11 +612,9 @@ router.route('/postiLavoro')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         } else {
             res.json({ message: 'Tutti i posti lavoro sono stati cancellati' });
-            
             ee.emit('Logga', "Database", "Cancella i postilavoro");
         }
     });
@@ -711,11 +626,9 @@ router.route('/postiLavoro/:postiLavoro_id')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         } else {
             res.send(lavoro);
-            
             ee.emit('Logga', "Database", "Richiesta dell'id di un postolavoro");
         }
     });
@@ -725,16 +638,13 @@ router.route('/postiLavoro/:postiLavoro_id')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         } else {
             res.json({ message: 'Posto lavoro cancellato' });
-            
             ee.emit('Logga', "Database", "Cancellazione dell'id di un postolavoro");
         }
     });
 });
-
 
 router.route('/postiLavoro/:postiLavoro_id/posto')
     .get(function (req, res) {
@@ -742,11 +652,9 @@ router.route('/postiLavoro/:postiLavoro_id/posto')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         res.send(JSON.stringify(lavoro.posto));
-        
         ee.emit('Logga', "Database", "Richiesta del posto di un postolavoro");
     });
 })
@@ -755,7 +663,6 @@ router.route('/postiLavoro/:postiLavoro_id/posto')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         if (req.body.posto) {
@@ -765,16 +672,13 @@ router.route('/postiLavoro/:postiLavoro_id/posto')
             if (err) {
                 res.send(err);
                 console.log("C'e' stato un errore: " + err);
-                
                 ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
             };
             res.json({ message: 'Posto Lavoro Aggiornato a:' + lavoro.posto });
-            
             ee.emit('Logga', "Database", "Aggiornamento del posto di un postolavoro");
         }); mongoose.connection.close();
     });
 })
-
 
 router.route('/postiLavoro/:postiLavoro_id/stato')
     .get(function (req, res) {
@@ -782,11 +686,9 @@ router.route('/postiLavoro/:postiLavoro_id/stato')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         res.send(lavoro.stato);
-        
         ee.emit('Logga', "Database", "Richiesta dello stato di un postolavoro");
     });
 })
@@ -795,7 +697,6 @@ router.route('/postiLavoro/:postiLavoro_id/stato')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         if (req.body.stato) {
@@ -805,16 +706,13 @@ router.route('/postiLavoro/:postiLavoro_id/stato')
             if (err) {
                 res.send(err);
                 console.log("C'e' stato un errore: " + err);
-                
                 ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
             };
             res.json({ message: 'Posto Lavoro Aggiornato a:' + lavoro.stato });
-            
             ee.emit('Logga', "Database", "Aggiornamento dello stato di un postolavoro");
         });
     });
 })
-
 
 router.route('/postiLavoro/:postiLavoro_id/capacita')
     .get(function (req, res) {
@@ -822,11 +720,9 @@ router.route('/postiLavoro/:postiLavoro_id/capacita')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         res.send(JSON.stringify(lavoro.capacita));
-        
         ee.emit('Logga', "Database", "Richiesta della capacita di un postolavoro");
     });
 })
@@ -835,7 +731,6 @@ router.route('/postiLavoro/:postiLavoro_id/capacita')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         if (req.body.capacita) {
@@ -845,16 +740,13 @@ router.route('/postiLavoro/:postiLavoro_id/capacita')
             if (err) {
                 res.send(err);
                 console.log("C'e' stato un errore: " + err);
-                
                 ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
             };
             res.json({ message: 'Posto Lavoro Aggiornato a:' + lavoro.capacita });
-            
             ee.emit('Logga', "Database", "Aggiornamento della capacita di un postolavoro");
         });
     });
 })
-//----------------------------------------------------------------------------------------------------------//
 
 /************************************************
 ************INIZIO SEZIONE POSTI STOCCAGGIO******
@@ -866,11 +758,9 @@ router.route('/postiStoccaggio')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         res.json(stoccaggio);
-        
         ee.emit('Logga', "Database", "Ottenere tutti i postiStoccaggio");
     });
 })
@@ -887,11 +777,9 @@ router.route('/postiStoccaggio')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         } else {
             res.json({ message: 'Inserito nuovo posto stoccaggio al posto:' + nuovoPostoStoccaggio.posto });
-            
             ee.emit('Logga', "Database", "Inserimento di un posto Stoccaggio");
         }
     });
@@ -901,16 +789,13 @@ router.route('/postiStoccaggio')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         } else {
             res.json({ message: 'Tutti i posti stoccaggio sono stati cancellati' });
-            
             ee.emit('Logga', "Database", "Cancellare tutti i postiStoccaggio");
         }
     });
 })
-
 
 router.route('/postiStoccaggio/:postiStoccaggio_id')
     .get(function (req, res) {
@@ -918,11 +803,9 @@ router.route('/postiStoccaggio/:postiStoccaggio_id')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         } else {
             res.send(stoccaggio);
-            
             ee.emit('Logga', "Database", "Richiesta dell'id di un postoStoccaggio");
         }
     });
@@ -932,16 +815,13 @@ router.route('/postiStoccaggio/:postiStoccaggio_id')
         if (err) {
             res.send(err);
             console.log('An Error Has Occured: ' + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         } else {
             res.json({ message: 'Posto stoccaggio cancellato' });
-            
             ee.emit('Logga', "Database", "Cancellazione dell'id di un postoStoccaggio");
         }
     });
 });
-
 
 router.route('/postiStoccaggio/:postiStoccaggio_id/posto')
     .get(function (req, res) {
@@ -949,11 +829,9 @@ router.route('/postiStoccaggio/:postiStoccaggio_id/posto')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         res.send(JSON.stringify(stoccaggio.posto));
-        
         ee.emit('Logga', "Database", "Richiesta di un posto di postoStoccaggio");
     });
 })
@@ -962,7 +840,6 @@ router.route('/postiStoccaggio/:postiStoccaggio_id/posto')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         if (req.body.posto) {
@@ -972,11 +849,9 @@ router.route('/postiStoccaggio/:postiStoccaggio_id/posto')
             if (err) {
                 res.send(err);
                 console.log("C'e' stato un errore: " + err);
-                
                 ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
             };
             res.json({ message: 'Posto Operatore Aggiornato a:' + stoccaggio.posto });
-            
             ee.emit('Logga', "Database", "Aggiornamento di un posto di postoStoccaggio");
         });
     });
@@ -990,11 +865,9 @@ router.route('/postiStoccaggio/:postiStoccaggio_id/stato')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         res.send(stoccaggio.stato);
-        
         ee.emit('Logga', "Database", "Richiesta di uno stato di postoStoccaggio");
     });
 })
@@ -1003,7 +876,6 @@ router.route('/postiStoccaggio/:postiStoccaggio_id/stato')
         if (err) {
             res.send(err);
             console.log("C'e' stato un errore: " + err);
-            
             ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
         };
         if (req.body.stato) {
@@ -1013,22 +885,17 @@ router.route('/postiStoccaggio/:postiStoccaggio_id/stato')
             if (err) {
                 res.send(err);
                 console.log("C'e' stato un errore: " + err);
-                
                 ee.emit("Logga", "ERRORE", 'An Error Has Occured: ' + err);
             };
             res.json({ message: 'Posto Stoccaggio Aggiornato a:' + stoccaggio.stato });
-            
             ee.emit('Logga', "Database", "Aggiornamento di uno stato di postoStoccaggio");
         });
     });
 })
 
-
 app.use('/api', router);
 
-/*
-*La porta in ascolto è stata scelta dall'utente, visto che tutte le porte sono aperte. *
-*/
+//La porta in ascolto è stata scelta dall'utente, visto che tutte le porte sono aperte. 
 
 app.listen(portapi);
 console.log('Magic happens on port ' + portapi);
@@ -1064,7 +931,6 @@ function menu() {
     inquirer.prompt(preguntas).then(function (respuestas) {
         controlloconnessione()       //effettua la connessione
         
-        
         if (respuestas.servicios == "-[1]Test Comandi") { //codice per entrare nella lista test Comandi
             comandi();
             return;
@@ -1078,8 +944,9 @@ function menu() {
             return;
 
         } else if (respuestas.servicios == "-[4]Default") {         // default utilizzato per eventuali aggiunte
-            console.log("Non c'è niente qui.");
-            menu();
+            //console.log("Non c'è niente qui.");
+            //menu();
+            modulo_Ciclo.cicloNominale();
             return;
 
         } else if (respuestas.servicios == '-[#]Esci') {
@@ -1131,7 +998,6 @@ function muoviOperatore(posizioneAttuale, urlOp, urlPezzo) {
         urlPezzo += '/posto';
         modifica_database(urlPezzo, putPosto);
         
-        
         putStato = { stato: 'INSCARICO' };
         modifica_database(urlOp, putStato);
 	
@@ -1171,7 +1037,6 @@ function cicloNominale1() {
                     
                     requestify.get(url).then(function (response) {
                         console.log(response.getBody());
-                        
                         requestify.get('http://localhost:' + portapi + '/api/pezzi').then(function (response) {
                             
                             var ids = [];
@@ -1221,11 +1086,7 @@ function cicloNominale1() {
                                                     requestify.get(url).then(function (response) {
                                                         
                                                         var temp = response.getBody();
-                                                        //if (res1 == 0) {
-                                                        //console.log("res1: " + res1);
                                                         var res2 = muoviOperatore(temp, urlOp, url);
-                                                        // return res2;
-                                                        //console.log("Ritornato res2: " + res2);
                                                         
                                                         ee.once('ricevutoReady', function () {
                                                             menu();
@@ -1251,31 +1112,6 @@ function cicloNominale1() {
 function invioDato(data) {
     riconosciComando(data);
 }
-
-//queste funzioni vanno messe nei timeout, se attivate vuol dire che il pacchetto è fallito in un punto
-//function attendiReady(idRichiesta) {
-//    ee.emit('Logga', 'ERRORE', 'Richiesta fallita su READY ID richiesta fallita: ' + idRichiesta);
-    
-//    console.log('Richiesta fallita su READY ' + idRichiesta);
-//    clearTimeout(timeOut2);
-//    clearTimeout(timeOut3);
-//    rl.prompt();
-//}
-
-//function attendiExec(idRichiesta) {
-//    ee.emit('Logga', 'ERRORE', 'Richiesta fallita su EXEC ID richiesta fallita: ' + idRichiesta);
-    
-//    console.log('Richiesta fallita su EXEC ' + idRichiesta);
-//    clearTimeout(timeOut3);
-//    rl.prompt();
-//}
-
-//function attendiServer(idRichiesta) {
-//    ee.emit('Logga', 'ERRORE', 'Richiesta fallita su ACK ID richiesta fallita: ' + idRichiesta);
-    
-//    console.log('Richiesta fallita su ACK ' + idRichiesta);
-//    rl.prompt();
-//}
 
 function riconosciComando(stringaGrezza) {
     // Dividere la frase in base al carattere ','    
@@ -1325,25 +1161,21 @@ function riconosciComando(stringaGrezza) {
         
         if ((isNaN(array[1]))) {
             console.log("Errore, il parametro deve essere un numero e non una stringa");
-            //  contaRichieste++;
             comandi();
             return;
         }
         
         comandi_Navetta.MuoviNavetta(array[0].toUpperCase(), array[1]);
         return;
-                 
     }
 
     else if (array[0].toUpperCase() == "OD") {
         /* Aggiunto il .toUpperCase() per fare sì che anche se scritto in minuscolo,
          * / il comando venga riconosciuto dal Server Raspberrry */
-
         /* Controllo sul numero di parametri, in questo caso non sono previsti parametri oltre al comando,
         quindi, se inseriti verrà restituito un messaggio d'errore */
         if (array[2] != undefined || array[1] != undefined) {
             console.log("Errore, non si devono inserire parametri");
-            //  contaRichieste++;
             comandi();
             return;
         } else {
@@ -1354,12 +1186,10 @@ function riconosciComando(stringaGrezza) {
     else if (array[0].toUpperCase() == "OP") {
         /* Aggiunto il .toUpperCase() per fare sì che anche se scritto in minuscolo,
          * / il comando venga riconosciuto dal Server Raspberrry */
-
         /* Controllo sul numero di parametri, in questo caso non sono previsti parametri oltre al comando,
         quindi, se inseriti verrà restituito un messaggio d'errore */
         if (array[2] != undefined || array[1] != undefined) {
             console.log("Errore, non si devono inserire parametri");
-            //   contaRichieste++;
             comandi();
             return;
         } else {
@@ -1370,7 +1200,6 @@ function riconosciComando(stringaGrezza) {
     else if (array[0].toUpperCase() == "RES") {
         /* Aggiunto il .toUpperCase() per fare sì che anche se scritto in minuscolo, 
          * /il comando venga riconosciuto dal Server Raspberrry */
-
         /* Controllo sul numero di parametri, in questo caso non sono previsti parametri oltre al comando,
         quindi, se inseriti verrà restituito un messaggio d'errore */
         if (array[2] != undefined || array[1] != undefined) {
@@ -1392,131 +1221,6 @@ function riconosciComando(stringaGrezza) {
     }
 }
 
-///* Parametri function: comando inserito dall'utente, parametri inseriti dall'utente */
-//function MuoviPezzo(comando, vet1, vet2) {												//Muove pezzo da vet1 a vet2 e poi torna in posizione 1(posto operatore)
-//    console.log("Entrato nella funzione MuoviPezzo");
-//    //console.log("Stato richiesta: "+ statoRichiesta);
-//    if (modulo.richiestaEseguibile() == false) {
-        
-//        return;
-//    }
-//    /* Aggiungo il numero di richiesta alla stringa inserita da console */
-//    contaRichieste++;
-//    client.write(contaRichieste + ',' + comando + ',' + vet1 + ',' + vet2 + '\n');
-//    ee.emit("inputComando", 0);
-//    //chiamata per ottenere un pezzo
-//    ee.on('ricevutoExec', function () {
-//        console.log("Entrato in evento ricevutoExec");
-//        requestify.get('http://localhost:' + portapi + '/api/pezzi').then(function (response) {
-            
-//            var url = 'http://localhost:' + portapi + '/api/pezzi/';
-//            var listaPezzi = response.getBody();
-//            for (var i = 0; i < listaPezzi.length; i++) {
-//                /* console.log("Entrato in for per aggiornamento db");
-//	console.log("listaPezzi[0]: " + listaPezzi[0]);
-//	console.log("posto di i(pezzo singolo): "+listaPezzi[i].posto);
-//	console.log("vet1: "+ vet1); */
-//            if (listaPezzi[i].posto == vet1) {
-//                    //aggiorna il posto del pezzo 
-                    
-//                    /* console.log("Entrato in if");		
-//				console.log("vet2 in if: " + vet2); */
-//				url = url + listaPezzi[i]._id + "/posto";
-//                    //console.log("url: " + url);
-//                    var put = { posto: vet2 };
-//                    /* requestify.put(url,put).then(function (risposta) {
-//					console.log("valore posto aggiornato: "+listaPezzi[i].posto);
-//                console.log(risposta.getBody().message);
-//                }) */
-//				modifica_database(url, put);
-//                }
-//            }
-//        })
-//    })
-    
-    
-    
-    
-//    var mex = contaRichieste + ',' + comando + ',' + vet1 + ',' + vet2;
-//    console.log("inviato al rPi " + mex);
-//    ee.emit('Logga', "RichiestaRaspberry", mex);
-//    //timeout();
-//}
-
-///* Parametri function: comando inserito dall'utente, parametro inserito dall'utente */
-//function MuoviNavetta(comando, vet1) {
-//    console.log("Richiesto mn");
-//    console.log(modulo)
-//    if (modulo.richiestaEseguibile() == false) {
-//        return;
-//    }
-    
-//    /* Aggiungo il numero di richiesta alla stringa inserita da console */
-//    console.log("INVIO PACCHETTO: " + contaRichieste + ',' + comando + ',' + vet1 + '\n');
-//    contaRichieste++;
-//    client.write(contaRichieste + ',' + comando + ',' + vet1 + '\n');
-//    ee.emit("inputComando", 0);
-    
-//    var mex = contaRichieste + ',' + comando + ',' + vet1;
-//    ee.emit('Logga', "RichiestaRaspberry", mex);
-
-//    //timeout();
-//}
-
-///* Parametri function: comando inserito dall'utente */
-//function OttieniDati(comando) {
-//    if (modulo.richiestaEseguibile() == false) {
-        
-//        return;
-//    }
-    
-//    /* Aggiungo il numero di richiesta alla stringa inserita da console */
-//    contaRichieste++;
-//    client.write(contaRichieste + ',' + comando + '\n');
-//    ee.emit("inputComando", 0);
-    
-//    var mex = contaRichieste + ',' + comando;
-//    ee.emit('Logga', "RichiestaRaspberry", mex);
-
-//    //timeout();
-//}
-
-///* Parametri function: comando inserito dall'utente */
-//function OttieniPostoNavetta(comando) {
-//    if (modulo.richiestaEseguibile() == false) {
-        
-//        return;
-//    }
-//    /* Aggiungo il numero di richiesta alla stringa inserita da console */
-//    contaRichieste++;
-//    client.write(contaRichieste + ',' + comando + '\n');
-//    ee.emit("inputComando", 0);
-    
-//    var mex = contaRichieste + ',' + comando;
-//    ee.emit('Logga', "RichiestaRaspberry", mex);
-
-//    //timeout();
-    
-//}
-
-///* Parametri function: comando inserito dall'utente */
-//function Reset(comando) {
-//    if (modulo.richiestaEseguibile() == false) {
-        
-//        return;
-//    }
-    
-//    /* Aggiungo il numero di richiesta alla stringa inserita da console */
-//    contaRichieste++;
-//    client.write(contaRichieste + ',' + comando + '\n');
-//    ee.emit("inputComando", 0);
-    
-//    var mex = contaRichieste + ',' + comando;
-//    ee.emit('Logga', "RichiestaRaspberry", mex);
-
-//   // timeout();    
-//}
-
 //evento per il file di log 
 ee.on('Logga', function (cat, mess) {
     WriteFile(cat, mess);
@@ -1527,8 +1231,7 @@ function WriteFile(categoria, messaggio) {
     
     dataOrario = new Date().toLocaleString();
     const FILENAME = "serverFMS.log";
-    
-    
+      
     if (categoria == "Connessione" || categoria == "Disconessione") {
         dati = "[" + dataOrario + "]-[" + categoria + "]-[" + messaggio + "]";
         fs.appendFileSync(FILENAME, dati += "\r\n", "UTF-8", { 'flags': 'a+' });
@@ -1545,30 +1248,33 @@ function WriteFile(categoria, messaggio) {
     fs.appendFileSync(FILENAME, "--\n");
 };
 
-
-
 client.on('data', function (data) {
     
-    /* Alla ricezione di dati da parte del server, azzererò il timeout inizializzato al momento dell'invio dei dati */
-    //analizzo la stringa che mi ritorna ed in base ad essa fermo i dovuti timeout
+    /*Alla ricezione di dati da parte del server, azzererò il timeout inizializzato al momento dell'invio dei dati 
+    analizzo la stringa che mi ritorna ed in base ad essa fermo i dovuti timeout*/
     var array = (data.toString()).split(',');
     console.log(array);
     
     if (array[1].startsWith("ack")) {
-        //clearTimeout(timeOut);
         ee.emit("inputComando", 1);
     }
 
     else if (array[1].startsWith("exec")) {
-        //clearTimeout(timeOut);
         ee.emit("inputComando", 3)
         console.log("Ricevuto Exec");
         ee.emit('ricevutoExec');
         console.log("Lanciato evento 'ricevutoExec'");
+        
+        if (isNaN(array[2]) == false) {
+            //se isNaN è false allora richiama la funzione Ottieni Posto Navetta
+        }
+        else if (array[2] != null) {       
+            var datiQr = array[2].split(';');                           //splitta il vettore del codice QR e li manda come parametro nella funzione dell'evento
+            ee.emit("ricevutoDatiQr", datiQr);
+        }
     }
 
     else if (array[1].startsWith("ready")) {
-        //clearTimeout(timeOut3);
         ee.emit("inputComando", 5)
         ee.emit('ricevutoReady');
         console.log("Lanciato evento 'ricevutoReady'");
@@ -1585,48 +1291,8 @@ client.on('data', function (data) {
     ee.emit('Logga', 'RispostaRaspberry', data);
     rl.setPrompt('>');
     rl.prompt();
-    
-/* client.on('data', function (data) {
-
-    /* Alla ricezione di dati da parte del server, azzererò il timeout inizializzato al momento dell'invio dei dati */
-/*   /*   //analizzo la stringa che mi ritorna ed in base ad essa fermo i dovuti timeout
-    var array = (data.toString()).split(',');
-console.log(array);
-    if (array[1] == "ack\n") {
-        clearTimeout(timeOut);
-        statoRichiesta = 2;
-    }
-    //per ora il server raspberry ha un errore dove exec e ready sono nello stesso messaggio, quindi ci siamo adattati.
-    if (array[1].slice(0, 4) == "exec" || array[1] == "exec\n0" || array[1] == "exec\n" || array[1] == "exec") {
-
-        clearTimeout(timeOut2);
-        statoRichiesta = 3;
-		console.log("Ricevuto Exec");
-		ee.emit('ricevutoExec');
-		console.log("Lanciato evento 'ricevutoExec'");
-        //l'altro errore è che exec arriva non separato da virgola con i parametri: quidndi lo estraiamo
-        /* if (array[1] == "ready\n" || array[2] == "ready\n") {
-            clearTimeout(timeOut3);
-            statoRichiesta = 0;
-			ee.emit('ricevutoReady');
-			console.log("Lanciato evento 'ricevutoReady'");                                                        //COMMENTATO TEMPORANEAMENTE(FORSE)
-        } */
- /*    }
-    if (array[1] == "ready\n" || array[2] == "ready\n") {
-        //ready è l'ultimo pezzo del messaggio e contiene /n alla fine quindi lo dobbiamo estrarre,
-        //cambia posizione a seconda del messaggio di risposta
-        clearTimeout(timeOut3);
-        statoRichiesta = 0;
-		ee.emit('ricevutoReady');
-		console.log("Lanciato evento 'ricevutoReady'");
-    }  
-    clearTimeout(timeOut);
-
-    ee.emit('Logga', 'RispostaRaspberry', data);
-    rl.setPrompt('>');
-    rl.prompt(); */ 		 																		
 })
-
+    												
 // Aggiungiamo il gestore dell'evento 'close' a questa (istanza di) socket
 client.on('close', function () {
     ee.emit('Logga', 'Disconessione', 'Il Server Raspberry si è disconesso');
@@ -1747,7 +1413,6 @@ function seconda() {
         } else if (risposta.query == "menù") {
             menu();
             return;
-
         }
     });
 };
@@ -1784,6 +1449,7 @@ function database() {
         } else if (risposta.progetto == "postiLavoro") {
             
             seconda1(risposta.progetto);
+
         } else if (risposta.progetto == "menù") {
             
             menu()
@@ -1894,7 +1560,6 @@ function cancellare_pezzi() {
             //chiamata per ottenere tutti i pezzi
             requestify.delete(url).then(function (response) {
                 console.log(response.getBody().message);
-                
                 opzioniMenu();
             })
         } else if (risposta.pezzetto == "menù") {
@@ -1932,7 +1597,6 @@ function inserire_pezzi() {
         
         }];
     inquirer.prompt(pezzi).then(function (risposta) {
-        
         if (risposta.pezzetto == "pezzo singolo") {
             console.log("Inserimento del pezzo :");
             
@@ -1992,7 +1656,6 @@ function ottenere_pezzi() {
             //chiamata per ottenere i pezzi
             requestify.get('http://localhost:' + portapi + '/api/pezzi').then(function (response) {
                 console.log(response.getBody());
-                
                 opzioniMenu();
             })
         } else if (risposta.pezzetto == "Torna a scelta posto") {
@@ -2051,7 +1714,6 @@ function modificare_pezzi() {
                 inquirer.prompt(pezziId).then(function (risposta) {
                     
                     //scelgo cosa voglio modificare del pezzo 
-                    
                     scelta_modifica(risposta, ids, nome);
                 });
             });
@@ -2069,9 +1731,6 @@ function modificare_pezzi() {
         }
     });
 }
-
-
-
 
 // funzione per cancellare i posti richiesti dall utente
 function cancellare_posti(tipo) {
@@ -2127,7 +1786,6 @@ function cancellare_posti(tipo) {
                                 url = url + ids[i]._id;
                                 requestify.delete(url).then(function (response) {
                                     console.log(response.getBody().message);
-                                    
                                     opzioniMenu();
                                 })
                             }
@@ -2153,7 +1811,6 @@ function cancellare_posti(tipo) {
                             choices: pos
                         }];
                     inquirer.prompt(id).then(function (risposta) {
-                        
                         
                         var url = 'http://localhost:' + portapi + '/api/postiStoccaggio/'
                         for (var i in pos) {
@@ -2188,14 +1845,12 @@ function cancellare_posti(tipo) {
                         }];
                     inquirer.prompt(id).then(function (risposta) {
                         
-                        
                         var url = 'http://localhost:' + portapi + '/api/postiLavoro/'
                         for (var i in pos) {
                             if (risposta.postiLavoro == pos[i].name) {
                                 url = url + ids[i]._id;
                                 requestify.delete(url).then(function (response) {
                                     console.log(response.getBody().message);
-                                    
                                     opzioniMenu();
                                 })
                             }
@@ -2214,14 +1869,12 @@ function cancellare_posti(tipo) {
                 
                 requestify.delete(url).then(function (response) {
                     console.log(response.getBody().message);
-                    
                     opzioniMenu();
                 });
             } else if (tipo == 'postiStoccaggio') {
                 var url = 'http://localhost:' + portapi + '/api/postiStoccaggio/';
                 requestify.delete(url).then(function (response) {
                     console.log(response.getBody().message);
-                    
                     opzioniMenu();
                 });
             } else if (tipo == 'postiLavoro') {
@@ -2229,12 +1882,10 @@ function cancellare_posti(tipo) {
                 
                 requestify.delete(url).then(function (response) {
                     console.log(response.getBody().message);
-                    
                     opzioniMenu();
                 });
             } else {
                 console.log('ERRORE');
-                
                 opzioniMenu();
             }
         } else if (risposta.post == "torna a scelta posto") {
@@ -2272,7 +1923,6 @@ function inserire_posti(tipo) {
         }];
     inquirer.prompt(posto).then(function (risposta) {
         
-        
         if (risposta.post == "posto singolo") {
             console.log("Inserimento del posto  :");
             
@@ -2298,7 +1948,6 @@ function inserire_posti(tipo) {
                     };
                     requestify.post(url, operatore).then(function (risposta) {
                         console.log(risposta.getBody().message);
-                        
                         opzioniMenu();
                     })
                 })
@@ -2324,7 +1973,6 @@ function inserire_posti(tipo) {
                     };
                     requestify.post(url, stoccaggio).then(function (risposta) {
                         console.log(risposta.getBody().message);
-                        
                         opzioniMenu();
                     })
                 })
@@ -2356,18 +2004,15 @@ function inserire_posti(tipo) {
                     };
                     requestify.post(url, stoccaggio).then(function (risposta) {
                         console.log(risposta.getBody().message);
-                        
                         opzioniMenu();
                     })
                 })
             } else {
                 console.log('ERRORE');
-                
                 opzioniMenu();
             }
         } else {
             console.log('ERRORE!');
-            
             opzioniMenu();
         }
     });
@@ -2427,7 +2072,6 @@ function ottenere_posti(tipo) {
                                 url = url + ids[i]._id;
                                 requestify.get(url).then(function (response) {
                                     console.log(response.getBody());
-                                    
                                     opzioniMenu();
                                 })
                             }
@@ -2460,7 +2104,6 @@ function ottenere_posti(tipo) {
                                 
                                 requestify.get(url).then(function (response) {
                                     console.log(response.getBody());
-                                    
                                     opzioniMenu();
                                 })
                             }
@@ -2493,7 +2136,6 @@ function ottenere_posti(tipo) {
                                 
                                 requestify.get(url).then(function (response) {
                                     console.log(response.getBody());
-                                    
                                     opzioniMenu();
                                 })
                             }
@@ -2502,7 +2144,6 @@ function ottenere_posti(tipo) {
                 })
             } else {
                 console.log('ERRORE!');
-                
                 opzioniMenu();
             }
         } else if (risposta.post == "tutti i posti") {
@@ -2511,21 +2152,16 @@ function ottenere_posti(tipo) {
             if (tipo == 'postiOperatore') {
                 requestify.get('http://localhost:' + portapi + '/api/postiOperatore').then(function (response) {
                     console.log(response.getBody());
-                    
                     opzioniMenu();
                 })
             } else if (tipo == 'postiStoccaggio') {
-                
                 requestify.get('http://localhost:' + portapi + '/api/postiStoccaggio').then(function (response) {
                     console.log(response.getBody());
-                    
                     opzioniMenu();
                 })
             } else if (tipo == 'postiLavoro') {
-                
                 requestify.get('http://localhost:' + portapi + '/api/postiLavoro').then(function (response) {
                     console.log(response.getBody());
-                    
                     opzioniMenu();
                 })
             }
@@ -2538,7 +2174,6 @@ function ottenere_posti(tipo) {
 
         } else {
             console.log('ERRORE!');
-            
             opzioniMenu();
         }
     });
@@ -2564,7 +2199,6 @@ function modificare_posti(tipo) {
             ]
         }];
     inquirer.prompt(posto).then(function (risposta) {
-        
         
         if (risposta.post == "posto singolo") {
             
@@ -2618,7 +2252,6 @@ function modificare_posti(tipo) {
                                 inquirer.prompt(operatoreModificato).then(function (risposta) {
                                     requestify.put(url, { posto: risposta.posto }).then(function (risposta) {
                                         console.log(risposta.getBody().message);
-                                        
                                         opzioniMenu();
                                     })
                                 })
@@ -2634,13 +2267,11 @@ function modificare_posti(tipo) {
                                 inquirer.prompt(operatoreModificato).then(function (risposta) {
                                     requestify.put(url, { stato: risposta.stato }).then(function (risposta) {
                                         console.log(risposta.getBody().message);
-                                        
                                         opzioniMenu();
                                     })
                                 })
                             } else {
                                 console.log('ERRORE');
-                                
                                 opzioniMenu();
                             }
                         })
@@ -2694,7 +2325,6 @@ function modificare_posti(tipo) {
                                 inquirer.prompt(stoccaggioModificato).then(function (risposta) {
                                     requestify.put(url, { posto: risposta.posto }).then(function (risposta) {
                                         console.log(risposta.getBody().message);
-                                        
                                         opzioniMenu();
                                     })
                                 })
@@ -2710,13 +2340,11 @@ function modificare_posti(tipo) {
                                 inquirer.prompt(stoccaggioModificato).then(function (risposta) {
                                     requestify.put(url, { stato: risposta.stato }).then(function (risposta) {
                                         console.log(risposta.getBody().message);
-                                        
                                         opzioniMenu();
                                     })
                                 })
                             } else {
                                 console.log('ERRORE');
-                                
                                 opzioniMenu();
                             }
                         })
@@ -2758,7 +2386,6 @@ function modificare_posti(tipo) {
                                 ]
                             }]
                         inquirer.prompt(mod).then(function (risposta) {
-                            
                             if (risposta.modifica == 'Posto') {
                                 url += '/posto';
                                 var lavoroModificato = [
@@ -2770,7 +2397,6 @@ function modificare_posti(tipo) {
                                 inquirer.prompt(lavoroModificato).then(function (risposta) {
                                     requestify.put(url, { posto: risposta.posto }).then(function (risposta) {
                                         console.log(risposta.getBody().message);
-                                        
                                         opzioniMenu();
                                     })
                                 })
@@ -2786,7 +2412,6 @@ function modificare_posti(tipo) {
                                 inquirer.prompt(lavoroModificato).then(function (risposta) {
                                     requestify.put(url, { stato: risposta.stato }).then(function (risposta) {
                                         console.log(risposta.getBody().message);
-                                        
                                         opzioniMenu();
                                     })
                                 })
@@ -2802,13 +2427,11 @@ function modificare_posti(tipo) {
                                 inquirer.prompt(lavoroModificato).then(function (risposta) {
                                     requestify.put(url, { capacita: risposta.capacita }).then(function (risposta) {
                                         console.log(risposta.getBody().message);
-                                        
                                         opzioniMenu();
                                     })
                                 })
                             } else {
                                 console.log('ERRORE');
-                                
                                 opzioniMenu();
                             }
                         })
@@ -2816,7 +2439,6 @@ function modificare_posti(tipo) {
                 })
             } else {
                 console.log('ERRORE');
-                
                 opzioniMenu();
             }
         } else if (risposta.post == "Menù") {
@@ -2828,7 +2450,6 @@ function modificare_posti(tipo) {
 
         } else {
             console.log('ERRORE!');
-            
             opzioniMenu();
         }
     });
@@ -2853,7 +2474,6 @@ function cicli() {
         }]; // stampa oggetto 
     inquirer.prompt(ciclo).then(function (risposta) {
         
-        
         if (risposta.cicli == "Ciclo1") {
             console.log('esecuzione ciclo');
             var res = cicloNominale1();
@@ -2863,7 +2483,6 @@ function cicli() {
         } else if (risposta.cicli == "menù") {
             menu();
             return;
-
         }
     })
 }
@@ -2887,7 +2506,6 @@ function controlloconnessione() {
             ee.emit('Logga', 'Connessione', 'Connesso al Server Raspberry');
         })
             // Appena questo client si collega con successo al server, inviamo dei dati che saranno ricevuti dal server quale messaggio dal client
-      
     }
 }
 //permette di tornare indietro e al menu 
@@ -2909,7 +2527,6 @@ function opzioniMenu() {
 
         } else if (risposta.progetto == "torna scelta posto") {
             database();
-
         }
     });
 };
@@ -2952,12 +2569,7 @@ function pezzo_posto_libero(stoccaggio, urlPezzo) {
             p = stoccaggio[i];
             var url = 'http://localhost:' + portapi + '/api/postiStoccaggio/' + p._id + '/stato';
             var put = { stato: 'OCCUPATO' };
-            
-            //requestify.put(url, { stato: 'OCCUPATO' }).then(function (response) {
-            // Get the response body (JSON parsed or jQuery object for XMLs)
-            // console.log('Posto di stoccaggio ' + p.posto + ' OCCUPATO');
-            // return;
-            //});
+
             ee.once('ricevutoExec', function () {
                 modifica_database(url, put);    // modifica stato posto stoccaggio in occupato
                 put = { posto: p.posto };
@@ -2973,28 +2585,11 @@ function pezzo_posto_libero(stoccaggio, urlPezzo) {
 //modifica il database con il nuovo pezzo
 function modifica_database(url, put) {
     console.log("Entrato in modifica_database");
-    
     requestify.put(url, put).then(function (response) {
         // Get the response body (JSON parsed or jQuery object for XMLs)
         console.log("Messaggio da modifica_database: " + response.getBody().message);
-      
     });
 }
-
-//spiegazione all'interno
-//function timeout() {
-//    /* Inizializzo un timeout, dopo 5 secondi senza ricevere risposta, verrà restituito un messaggio di fallimento
-//    e all'utente sarà concesso di inserire nuovamente il comando */
-//    timeOut = setTimeout(attendiServer, 5000, contaRichieste);
-    
-//    /* timeOut2 e timeOut3 riguardano i messaggi di 'exec' e 'ready', abbiamo inserito un tempo di 50000 ms, 
-//    poichè è il tempo impiegato (incrementato di 10000 ms) dal braccio per eseguire lo spostamento massimo (testato fisicamente) */
-//    timeOut2 = setTimeout(attendiExec, 50000, contaRichieste);
-//    timeOut3 = setTimeout(attendiReady, 50000, contaRichieste);
-//    console.log('invio..');
-//    //contaRichieste++;
-  
-//}
 
 //entra nel database e prende l id e il nome del pezzo da cancellare
 function id_nome_pezzo_canc() {
@@ -3015,14 +2610,12 @@ function id_nome_pezzo_canc() {
             }];
         inquirer.prompt(pezziId).then(function (risposta) {
             
-            
             var url = 'http://localhost:' + portapi + '/api/pezzi/'
             for (var i in nome) {
                 if (risposta.pezzi == nome[i].name) {
                     url = url + ids[i]._id;
                     requestify.delete(url).then(function (response) {
                         console.log(response.getBody().message);
-                        
                         opzioniMenu();
                     })
                 }
@@ -3072,7 +2665,6 @@ function dati_pezzo_nuovo() {
         //chiamata per inserire il nuovo pezzo
         requestify.post(url, pezzo).then(function (response) {
             console.log(response.getBody().message);
-            
             opzioniMenu();
         })
     });
@@ -3104,7 +2696,6 @@ function id_nome_pezzo_ott() {
                     url = url + ids[i]._id;
                     requestify.get(url).then(function (response) {
                         console.log(response.getBody());
-                        
                         opzioniMenu();
                     })
                 }
@@ -3112,8 +2703,6 @@ function id_nome_pezzo_ott() {
         })
     })
 }
-
-
 
 //scelgo cosa voglio modificare del pezzo 
 function scelta_modifica(risposta, ids, nome) {
@@ -3157,7 +2746,6 @@ function scelta_modifica(risposta, ids, nome) {
                     inquirer.prompt(question).then(function (risposta) {
                         requestify.put(url, { nome: risposta.nome }).then(function (response) {
                             console.log(response.getBody().message);
-                            
                             opzioniMenu();
                         })
                     });
@@ -3172,7 +2760,6 @@ function scelta_modifica(risposta, ids, nome) {
                     inquirer.prompt(question).then(function (risposta) {
                         requestify.put(url, { posto: risposta.posto }).then(function (response) {
                             console.log(response.getBody().message);
-                            
                             opzioniMenu();
                         })
                     });
@@ -3187,7 +2774,6 @@ function scelta_modifica(risposta, ids, nome) {
                     inquirer.prompt(question).then(function (risposta) {
                         requestify.put(url, { stato: risposta.stato.toUpperCase() }).then(function (response) {
                             console.log(response.getBody().message);
-                            
                             opzioniMenu();
                         })
                     });
@@ -3202,7 +2788,6 @@ function scelta_modifica(risposta, ids, nome) {
                     inquirer.prompt(question).then(function (risposta) {
                         requestify.put(url, { tLav: risposta.tLav }).then(function (response) {
                             console.log(response.getBody().message);
-                            
                             opzioniMenu();
                         })
                     });
@@ -3217,44 +2802,18 @@ function scelta_modifica(risposta, ids, nome) {
                     inquirer.prompt(question).then(function (risposta) {
                         requestify.put(url, { operazione: risposta.operazione }).then(function (response) {
                             console.log(response.getBody().message);
-                            
                             opzioniMenu();
                         })
                     });
                 } else {
                     console.log('ERRORE!');
-                    
                     opzioniMenu();
                 }
             });
         }
     }
 }
-/* function menuComandi() {
-    var option =
- [{
-            type: "list",
-            message: "Scegli menù",
-            name: "menu",
-            choices: [
-                {
-                    name: "Esegui un altro comando",
-                },
-                {
-                    name: "Vai al menù principale"
-                }
-            ]
-        }];
-    inquirer.prompt(option).then(function (risposta) {
-        //modifico nome
-        if (risposta.menu == "Esegui un altro comando") {
-            comandi();
-        }
-        else if (risposta.menu == "Vai al menù principale") {
-            menu();
-        }
-    })
-} */
+
 function menuCicli() {
     var option =
  [{
