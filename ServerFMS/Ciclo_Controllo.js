@@ -7,7 +7,7 @@ var ciclo = {};
 
 module.exports = function (ee, portapi, client, comandi_Navetta) {
 
-const REQUEST = require('requestify');
+    const REQUEST = require('requestify');
     var idOperatore;
     var postoOperatore;
        
@@ -19,17 +19,18 @@ const REQUEST = require('requestify');
         console.log("Entrato in controllo finiti")
             //Questa sezione si occupa di gestire i pezzi finiti  [CONTROLLO PEZZI FINITI]
         REQUEST.get('http://localhost:' + portapi + '/api/pezzi').then(function (response) {
+
             var pezzi = response.getBody();
             var pezzof;      
-            /*Ottengo posti Stoccaggio*/
-        /**
-         * NOTA: In questo ciclo sui pezzi se ci sono più pezzi finiti vengono rilevati correttamente ma il controllo con i posti di
-         *       lavorazione (nel secondo ciclo) viene eseguito sempre sullo stesso pezzo (il primo che trova)
-         * 
-         */ 
-        REQUEST.get('http://localhost:' + portapi + '/api/postiStoccaggio').then(function (response) {
-            for ( var i = 0; i < pezzi.length; i++) {
-                console.log( pezzi[i].nome + ', ' + pezzi[i].posto + ', ' + pezzi[i].stato + "I"  + i );
+           //Ottengo posti Stoccaggio
+           /*
+             NOTA: In questo ciclo sui pezzi se ci sono più pezzi finiti vengono rilevati correttamente ma il controllo con i posti di
+                lavorazione (nel secondo ciclo) viene eseguito sempre sullo stesso pezzo (il primo che trova)
+           */   
+                  
+            REQUEST.get('http://localhost:' + portapi + '/api/postiStoccaggio').then(function (response) {
+                for ( var i = 0; i < pezzi.length; i++) {
+                    console.log( pezzi[i].nome + ', ' + pezzi[i].posto + ', ' + pezzi[i].stato + "I"  + i );
                     if ( pezzi[i].stato.toUpperCase() == 'FINITO' ) {
                         pezzof = pezzi[i];
                         console.log( "PEZZO FINITO : " + pezzof.posto )
@@ -57,15 +58,14 @@ const REQUEST = require('requestify');
                                                 })
                                             })
                                         }             
-                                }                                                   
-                            })                          
-                        }
-                    })                                              
-                  }                  
+                                    }                                                   
+                                })                          
+                            }
+                        })                                              
+                    }                  
                 }
                 controlloFinitiStoccaggio();
             })
-        
         })
 }
 
@@ -98,14 +98,13 @@ const REQUEST = require('requestify');
                                                         REQUEST.put('http://localhost:' + portapi + '/api/postiStoccaggio/' + postoStoccaggio._id + '/stato', { stato: 'LIBERO' }).then(function (response) {
                                                         })
                                                     })
-                                                })
+                                                })      
                                             })
                                             console.log("Parametri muoviepezzo :  " + postoOperatore.posto)
                                             var ret = comandi_Navetta.MuoviPezzo('MP', pezzo.posto, postoOperatore.posto)
                                             if (ret == false) {
                                                 return;
                                             }
-                                                    
                                         }
                                     }
                                 })
@@ -114,7 +113,6 @@ const REQUEST = require('requestify');
                     }
                 }
             })
-
           })
        }
     
@@ -139,7 +137,7 @@ const REQUEST = require('requestify');
         })
         REQUEST.get('http://localhost:' + portapi + '/api/postiLavoro/' + idLavoro).then(function (response) {
              postoLavoro = response.getBody();
-            REQUEST.get('http://localhost:' + portapi + '/api/' + tPosto + '/' + idPosto).then(function (response) {
+             REQUEST.get('http://localhost:' + portapi + '/api/' + tPosto + '/' + idPosto).then(function (response) {
                 console.log('MP ' + response.getBody().posto + ' ' + postoLavoro.posto);
                 var ret = comandi_Navetta.MuoviPezzo('MP', response.getBody().posto, postoLavoro.posto)
                 if (ret == false) {
@@ -161,7 +159,7 @@ const REQUEST = require('requestify');
     function gestisciPezzi() {
         var processato = false;
         //Questa sezione gestisce i pezzi grezzi nello stoccaggio                                                                
-        console.log("Entrato in gestisciPezzi")
+        console.log("Entrato in gestisciPezzi");
         /*Ottieni Pezzi*/                           
         REQUEST.get('http://localhost:' + portapi + '/api/pezzi').then(function (response) {
             var pezzi = response.getBody();
@@ -184,7 +182,6 @@ const REQUEST = require('requestify');
                                             return;
                                         }
                                     }
-                                    
                                 })
                             }                 
                         }
@@ -198,73 +195,71 @@ const REQUEST = require('requestify');
     //Questa sezione rileva quando il posto operatore è carico, ne legge il Qrcode aggiungendo il pezzo al db e poi sembra manchi muovipezzo da operatore a uno stoccaggio
     function caricaParti() { 
         var url = 'http://localhost:' + portapi + '/api/'
-        console.log("URL IN CARICAPARTI: " +url)
+        console.log("URL IN CARICAPARTI: " + url);
         /*Ottieni posto operatore*/
         REQUEST.get(url + 'postiOperatore/').then(function (response) {
             //postoOperatore = response.getBody()[0];          
             for (var i in response.getBody()) {
                 if (response.getBody()[i].stato.toUpperCase() == 'CARICO') {
                     console.log("Trovato posto operatore carico, chiamo muovinavetta");
-                    var ret = comandi_Navetta.MuoviNavetta('MN', response.getBody()[i].posto)
-                    if (ret ==false ) {
-                        console.log("ret = false")
+                    var ret = comandi_Navetta.MuoviNavetta('MN', response.getBody()[i].posto);
+                    if (ret == false) {
+                        console.log("ret = false");
                         break;
                     }
                     ee.once("ricevutoReady", function () {
-                        ret = comandi_Navetta.OttieniDati('OD')
+                        ret = comandi_Navetta.OttieniDati('OD');
                         if (ret == false) {
-                            console.log("ret = false dopo OD")              
+                            console.log("ret = false dopo OD");
                             return;
                         }
-                        ee.once("inseritoNuovoPezzo", function (datiPezzo)
-                    {
-                    REQUEST.get(url + 'postiStoccaggio').then(function (response) {
-                        var stoccaggio = response.getBody();
-                        
-                        for (var i in stoccaggio) {
-                            if (stoccaggio[i].stato.toUpperCase() == 'LIBERO') {
-                                var ret = comandi_Navetta.MuoviPezzo('MP', 1, stoccaggio[i].posto)
+                        ee.once("inseritoNuovoPezzo", function (datiPezzo) {
+                            REQUEST.get(url + 'postiStoccaggio').then(function (response) {
+                                var stoccaggio = response.getBody();
+                                
+                                for (var i in stoccaggio) {
+                                    if (stoccaggio[i].stato.toUpperCase() == 'LIBERO') {
+                                        var ret = comandi_Navetta.MuoviPezzo('MP', 1, stoccaggio[i].posto);
                                         if (ret == false) {
                                             break;
                                         }
-                                var url = 'http://localhost:' + portapi + '/api/postiStoccaggio/' + stoccaggio[i]._id + '/stato';
-                                var put = { stato: 'OCCUPATO' };
-      
+                                        var url = 'http://localhost:' + portapi + '/api/postiStoccaggio/' + stoccaggio[i]._id + '/stato';
+                                        var put = { stato: 'OCCUPATO' };
+                                        
                                         ee.once('ricevutoReady', function () {
-                                    comandi_Navetta.modifica_database(url, put);    // modifica stato posto stoccaggio in occupato
-                                    put = { stato: 'LIBERO' };
-                                    var urlPezzo = 'http://localhost:' + portapi + '/api/postiOperatore/' + idOperatore + '/stato';
-                                    comandi_Navetta.modifica_database(urlPezzo, put);
-                                })
-                                break;
-                            }
-                        }
-
+                                            comandi_Navetta.modifica_database(url, put);    // modifica stato posto stoccaggio in occupato
+                                            put = { stato: 'LIBERO' };
+                                            var urlPezzo = 'http://localhost:' + portapi + '/api/postiOperatore/' + idOperatore + '/stato';
+                                            comandi_Navetta.modifica_database(urlPezzo, put);
+                                        })
+                                        break;
+                                    }
+                                }
+                            })
+                        })
                     })
-                })
-              })
-             }     
-          }
-    })
-ee.emit("FinitocaricaParti");
+                }
+            }
+        })
+    ee.emit("FinitocaricaParti");
 }
                
     ciclo.cicloNominale = function cicloNominale() {
         //get idoperatore
         REQUEST.get('http://localhost:' + portapi + '/api/' + 'postiOperatore/').then(function (response) {
-            console.log("Effetuata richiesta postoOperatore")
-                idOperatore = response.getBody()[0]._id;
+            console.log("Effetuata richiesta postoOperatore");
+            idOperatore = response.getBody()[0]._id;
             ciclo.cicloNominale_2();
         })
     }             
                                  
         ciclo.cicloNominale_2 = function cicloNominale_2() { 
-        if (comandi_Navetta.richiestaEseguibile() == true) {
-            caricaParti(idOperatore);
-                ee.once("FinitocaricaParti", gestisciPezzi)        
-        }  
-        setTimeout(cicloNominale_2, 7000);
-    }
+            if (comandi_Navetta.richiestaEseguibile() == true) {
+                caricaParti(idOperatore);
+                ee.once("FinitocaricaParti", gestisciPezzi);        
+            }  
+            setTimeout(cicloNominale_2, 7000);
+        }   
     return ciclo;
 }
     
